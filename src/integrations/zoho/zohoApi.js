@@ -48,3 +48,49 @@ export async function sendZohoUsersToHireRocks(selectedIds) {
 
   return res.data;
 }
+
+export async function fetchZohoProjects() {
+  return new Promise((resolve, reject) => {
+    if (!window.ZOHO) {
+      reject("Zoho SDK not initialized");
+      return;
+    }
+
+    window.ZOHO.CRM.API.getAllRecords({
+      Entity: "Projects",
+      sort_order: "asc",
+    })
+      .then((response) => {
+        resolve(response.data || []);
+      })
+      .catch((err) => reject(err));
+  });
+}
+
+/**
+ * Sends selected Zoho projects to the HireRocks API.
+ */
+export async function syncProjectsToHireRocks(selectedProjects) {
+  const token = localStorage.getItem("access_token");
+  const hireRocksOrgId = localStorage.getItem("hireRocksOrgId");
+
+  const payload = {
+    OrganizationId: hireRocksOrgId,
+    Source: "Zoho",
+    Projects: selectedProjects.map((p) => ({
+      ExternalId: p.id,
+      Title: p.Project_Name || p.Name || "Untitled Project",
+      Description: p.Description || "",
+      StartDate: p.Start_Date || new Date().toISOString(),
+    })),
+  };
+
+  const res = await axios.post(`${BASE_URL}/api/tracker/plugin/sync-projects`, payload, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  return res.data;
+}
