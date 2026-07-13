@@ -23,6 +23,8 @@ import {
   fetchZohoUsers,
   sendZohoUsersToHireRocks,
 } from "../integrations/zoho/zohoApi.js";
+import { Select, message } from "antd";
+import JobSyncStep from "../components/JobSyncStep";
 
 function Organization() {
   const navigate = useNavigate();
@@ -45,6 +47,8 @@ function Organization() {
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [employeesList, setEmployeesList] = useState([]);
+  const { Option } = Select;
+  const [syncedJobs, setSyncedJobs] = useState([]);
 
   const APP_URI = process.env.REACT_APP_API_URL;
   const MAX_SELECT = 10;
@@ -115,7 +119,7 @@ function Organization() {
   };
 
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 4) return;
 
     const hireRocksOrgId = localStorage.getItem("hireRocksOrgId");
 
@@ -241,6 +245,39 @@ function Organization() {
       };
     }
   }, [platform, step]);
+
+  const handleFinalSync = async () => {
+    try {
+      setLoading(true);
+      const selectedIds = selectedEmployees.map((e) => e.id);
+      if (platform === "zoho") await sendZohoUsersToHireRocks(selectedIds);
+      else await sendSalesforceUsersToHireRocks(selectedIds);
+
+      const assignments = selectedEmployees.map((emp) => ({
+        EmployeeId: emp.id,
+        JobId: emp.jobId,
+      }));
+
+      await axios.post(
+        `${APP_URI}/api/tracker/plugin/assign-contracts`,
+        {
+          OrganizationId: localStorage.getItem("hireRocksOrgId"),
+          Assignments: assignments,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+
+      setStep(5);
+    } catch (error) {
+      message.error("Sync failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleZohoUsers = async () => {
     try {
@@ -674,6 +711,93 @@ function Organization() {
           </div>
         )}
 
+        {/* --- Step 3: NEW Job Sync Step --- */}
+        {step === 3 && (
+          <JobSyncStep
+            onNext={(jobs) => {
+              setSyncedJobs(jobs); // Receive list of {id, name} from JobSyncStep
+              setStep(4);
+            }}
+          />
+        )}
+
+        {/* --- Step 4: Modified Employee Selection & Assignment --- */}
+        {createMode && step === 4 && (
+          <div className="w-full max-w-4xl mx-auto">
+            <h2 className="text-xl font-bold text-gray-700 mb-4">
+              Assign Employees to Sync Projects
+            </h2>
+            <div className="bg-white border border-gray-300 rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-2 text-left">User</th>
+                    <th className="p-2 text-left">Email</th>
+                    <th className="p-2 text-left">Assign Job</th>
+                    <th className="p-2 text-center">Select</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeesList.map((emp) => {
+                    const isSelected = selectedEmployees.find(
+                      (e) => e.id === emp.id
+                    );
+                    return (
+                      <tr key={emp.id} className="hover:bg-gray-50 border-t">
+                        <td className="p-2">{emp.name}</td>
+                        <td className="p-2">{emp.email}</td>
+                        <td className="p-2">
+                          <Select
+                            placeholder="Pick a Job"
+                            className="w-full"
+                            value={isSelected?.jobId}
+                            onChange={(jobId) => {
+                              // Custom logic to update the selectedEmployees array with the chosen jobId
+                              setSelectedEmployees((prev) => {
+                                const exists = prev.find(
+                                  (e) => e.id === emp.id
+                                );
+                                if (exists)
+                                  return prev.map((e) =>
+                                    e.id === emp.id ? { ...e, jobId } : e
+                                  );
+                                return [...prev, { ...emp, jobId }];
+                              });
+                            }}
+                          >
+                            {syncedJobs.map((j) => (
+                              <Option key={j.id} value={j.id}>
+                                {j.name}
+                              </Option>
+                            ))}
+                          </Select>
+                        </td>
+                        <td className="p-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={!!isSelected}
+                            onChange={() => {
+                              /* Toggle logic */
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleFinalSync}
+                className="bg-blue-500 text-white px-6 py-2 rounded-md"
+              >
+                {loading ? "Processing..." : "Finish Setup"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Step 4: Add Employees */}
         {createMode && step === 3 && (
           <div className="w-full max-w-3xl mx-auto">
@@ -811,4 +935,4 @@ function Organization() {
   );
 }
 
-export default Organization;    
+export default Organization;
