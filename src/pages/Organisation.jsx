@@ -23,7 +23,7 @@ import {
   fetchZohoUsers,
   sendZohoUsersToHireRocks,
 } from "../integrations/zoho/zohoApi.js";
-import { Select, message } from "antd";
+import { Checkbox, Select, message } from "antd";
 import JobSyncStep from "../components/JobSyncStep";
 
 function Organization() {
@@ -246,38 +246,38 @@ function Organization() {
     }
   }, [platform, step]);
 
-  const handleFinalSync = async () => {
-    try {
-      setLoading(true);
-      const selectedIds = selectedEmployees.map((e) => e.id);
-      if (platform === "zoho") await sendZohoUsersToHireRocks(selectedIds);
-      else await sendSalesforceUsersToHireRocks(selectedIds);
+  // const handleFinalSync = async () => {
+  //   try {
+  //     setLoading(true);
+  //     const selectedIds = selectedEmployees.map((e) => e.id);
+  //     if (platform === "zoho") await sendZohoUsersToHireRocks(selectedIds);
+  //     else await sendSalesforceUsersToHireRocks(selectedIds);
 
-      const assignments = selectedEmployees.map((emp) => ({
-        EmployeeId: emp.id,
-        JobId: emp.jobId,
-      }));
+  //     const assignments = selectedEmployees.map((emp) => ({
+  //       EmployeeId: emp.id,
+  //       JobId: emp.jobId,
+  //     }));
 
-      await axios.post(
-        `${APP_URI}/api/tracker/plugin/assign-contracts`,
-        {
-          OrganizationId: localStorage.getItem("hireRocksOrgId"),
-          Assignments: assignments,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-          },
-        }
-      );
+  //     await axios.post(
+  //       `${APP_URI}/api/tracker/plugin/assign-contracts`,
+  //       {
+  //         OrganizationId: localStorage.getItem("hireRocksOrgId"),
+  //         Assignments: assignments,
+  //       },
+  //       {
+  //         headers: {
+  //           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+  //         },
+  //       }
+  //     );
 
-      setStep(5);
-    } catch (error) {
-      message.error("Sync failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  //     setStep(5);
+  //   } catch (error) {
+  //     message.error("Sync failed.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const handleZohoUsers = async () => {
     try {
@@ -365,6 +365,100 @@ function Organization() {
   const handleCreateOrganization = () => {
     setCreateMode(true);
     setStep(1);
+  };
+
+  // Fetch CRM Users when we reach Step 4
+  useEffect(() => {
+    if (step !== 4) return;
+    const hireRocksOrgId = localStorage.getItem("hireRocksOrgId");
+
+    const loadUsers = async (token, fetchFunc) => {
+      try {
+        setLoading(true);
+        const raw = await fetchFunc(token, hireRocksOrgId);
+        const records = Array.isArray(raw)
+          ? raw
+          : raw?.users || raw?.data || [];
+        const mapped = records.map((u) => ({
+          id: u.Id ?? u.id ?? u.userId,
+          name:
+            u.FirstName || u.LastName
+              ? `${u.FirstName || ""} ${u.LastName || ""}`.trim()
+              : u.Full_Name || u.Name || "",
+          email: (u.Email ?? u.email) || "",
+          role: (u.Role ?? u.role) || "Member",
+        }));
+        setEmployeesList(mapped);
+      } catch (err) {
+        message.error("Failed to load users from CRM");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (platform === "zoho") {
+      const token = getZohoAccessToken();
+      if (token) loadUsers(token, fetchZohoUsers);
+      else loginToZoho();
+    } else if (platform === "salesforce") {
+      const token = getSalesforceAccessToken();
+      if (token) loadUsers(token, fetchSalesforceUsers);
+      else loginToSalesforce();
+    }
+  }, [step, platform]);
+
+  const handleToggleEmployee = (emp) => {
+    setSelectedEmployees((prev) => {
+      const exists = prev.find((e) => e.id === emp.id);
+      if (exists) return prev.filter((e) => e.id !== emp.id);
+      return [...prev, { ...emp, jobId: null }];
+    });
+  };
+
+  const handleUpdateJobForEmployee = (empId, jobId) => {
+    setSelectedEmployees((prev) =>
+      prev.map((e) => (e.id === empId ? { ...e, jobId } : e))
+    );
+  };
+
+  // Final API call: Sync Users + Assign Contracts
+  const handleFinalSync = async () => {
+    if (selectedEmployees.length === 0)
+      return message.warning("Please select at least one employee");
+    if (selectedEmployees.some((e) => !e.jobId))
+      return message.error("Please assign a job to all selected employees");
+
+    setLoading(true);
+    try {
+      const ids = selectedEmployees.map((e) => e.id);
+      // 1. Create Users in HireRocks
+      if (platform === "zoho") await sendZohoUsersToHireRocks(ids);
+      else await sendSalesforceUsersToHireRocks(ids);
+
+      // 2. Create Contracts (Assign Jobs)
+      await axios.post(
+        `${APP_URI}/api/tracker/plugin/assign-contracts`,
+        {
+          OrganizationId: localStorage.getItem("hireRocksOrgId"),
+          Assignments: selectedEmployees.map((e) => ({
+            EmployeeId: e.id,
+            JobId: e.jobId,
+          })),
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+
+      message.success("Setup complete!");
+      setStep(5);
+    } catch (e) {
+      message.error("Final synchronization failed.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const verifyOTP = async () => {
@@ -721,49 +815,44 @@ function Organization() {
           />
         )}
 
-        {/* --- Step 4: Modified Employee Selection & Assignment --- */}
-        {createMode && step === 4 && (
-          <div className="w-full max-w-4xl mx-auto">
+        {/* Step 4: Employee Selection & Assignment */}
+        {step === 4 && (
+          <div className="w-full">
             <h2 className="text-xl font-bold text-gray-700 mb-4">
-              Assign Employees to Sync Projects
+              Step 4: Assign Employees to Synced Projects
             </h2>
             <div className="bg-white border border-gray-300 rounded-md overflow-hidden">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="p-2 text-left">User</th>
-                    <th className="p-2 text-left">Email</th>
-                    <th className="p-2 text-left">Assign Job</th>
-                    <th className="p-2 text-center">Select</th>
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="p-3 text-left">User</th>
+                    <th className="p-3 text-left">Assign Job</th>
+                    <th className="p-3 text-center">Select</th>
                   </tr>
                 </thead>
                 <tbody>
                   {employeesList.map((emp) => {
-                    const isSelected = selectedEmployees.find(
+                    const selectedData = selectedEmployees.find(
                       (e) => e.id === emp.id
                     );
                     return (
                       <tr key={emp.id} className="hover:bg-gray-50 border-t">
-                        <td className="p-2">{emp.name}</td>
-                        <td className="p-2">{emp.email}</td>
-                        <td className="p-2">
+                        <td className="p-3">
+                          {emp.name}
+                          <br />
+                          <span className="text-xs text-gray-400">
+                            {emp.email}
+                          </span>
+                        </td>
+                        <td className="p-3">
                           <Select
-                            placeholder="Pick a Job"
+                            placeholder="Select a Job"
                             className="w-full"
-                            value={isSelected?.jobId}
-                            onChange={(jobId) => {
-                              // Custom logic to update the selectedEmployees array with the chosen jobId
-                              setSelectedEmployees((prev) => {
-                                const exists = prev.find(
-                                  (e) => e.id === emp.id
-                                );
-                                if (exists)
-                                  return prev.map((e) =>
-                                    e.id === emp.id ? { ...e, jobId } : e
-                                  );
-                                return [...prev, { ...emp, jobId }];
-                              });
-                            }}
+                            disabled={!selectedData}
+                            value={selectedData?.jobId}
+                            onChange={(jobId) =>
+                              handleUpdateJobForEmployee(emp.id, jobId)
+                            }
                           >
                             {syncedJobs.map((j) => (
                               <Option key={j.id} value={j.id}>
@@ -772,13 +861,10 @@ function Organization() {
                             ))}
                           </Select>
                         </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={!!isSelected}
-                            onChange={() => {
-                              /* Toggle logic */
-                            }}
+                        <td className="p-3 text-center">
+                          <Checkbox
+                            checked={!!selectedData}
+                            onChange={() => handleToggleEmployee(emp)}
                           />
                         </td>
                       </tr>
@@ -787,143 +873,28 @@ function Organization() {
                 </tbody>
               </table>
             </div>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-6 flex justify-end">
               <button
                 onClick={handleFinalSync}
-                className="bg-blue-500 text-white px-6 py-2 rounded-md"
+                className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-all"
               >
-                {loading ? "Processing..." : "Finish Setup"}
+                {loading ? "Syncing..." : "Finish and Sync"}
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Add Employees */}
-        {createMode && step === 3 && (
-          <div className="w-full max-w-3xl mx-auto">
-            <label className="block text-lg font-bold text-gray-700 mb-2">
-              From your CRM users, you may select up to 10 users based on your
-              plan.
-            </label>
-
-            <div className="relative">
-              {/* Selected employees box */}
-              <div
-                className="border border-gray-300 rounded-md p-3 cursor-pointer bg-white overflow-y-auto max-h-40"
-                onClick={() => setIsOpen(!isOpen)}
-              >
-                {selectedEmployees.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedEmployees.map((emp) => (
-                      <span
-                        key={emp.id}
-                        className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-sm flex items-center"
-                      >
-                        {emp.name}
-                        <button
-                          className="ml-1 text-red-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelect(emp);
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-gray-400">Select employees...</span>
-                )}
-              </div>
-
-              {/* Dropdown — absolute inside parent so it stays within white box */}
-              {isOpen && (
-                <div className="absolute left-0 mt-1 w-[80vw] max-w-[80%] border border-gray-300 rounded-md max-h-60 overflow-y-auto bg-white shadow-xl z-10 p-2">
-                  {employeesList.length === 0 ? (
-                    <div className="p-2 text-gray-500 italic">
-                      {platform === "zoho"
-                        ? "No Zoho users found."
-                        : platform === "salesforce"
-                        ? "No Salesforce users found."
-                        : "Showing 100 default users."}
-                    </div>
-                  ) : (
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="bg-gray-100 sticky top-0">
-                          <th className="border px-2 py-1 text-left">User</th>
-                          <th className="border px-2 py-1 text-left">Email</th>
-                          <th className="border px-2 py-1 text-left">Role</th>
-                          <th className="border px-2 py-1 text-center">
-                            Add to Hirerocks
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {employeesList.map((emp) => {
-                          const isSelected = selectedEmployees.some(
-                            (e) => e.id === emp.id
-                          );
-
-                          return (
-                            <tr key={emp.id} className="hover:bg-gray-50">
-                              <td className="border px-2 py-1">{emp.name}</td>
-                              <td className="border px-2 py-1">{emp.email}</td>
-                              <td className="border px-2 py-1">{emp.role}</td>
-
-                              <td className="border px-2 py-1 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  disabled={
-                                    !isSelected &&
-                                    selectedEmployees.length >= MAX_SELECT
-                                  }
-                                  onChange={() => handleSelect(emp)}
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Button next to dropdown */}
-            <div className="flex items-center justify-between mt-3">
-              <button
-                onClick={handleDoneClick}
-                className={`px-4 py-2 rounded-md text-white 
-                 ${
-                   loading
-                     ? "bg-gray-400 cursor-not-allowed"
-                     : "bg-blue-500 hover:bg-blue-700"
-                 }
-               `}
-              >
-                {loading ? "Loading..." : "Done"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 5: Final Confirmation */}
+        {/* Step 5: Success */}
         {step === 5 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800">
+          <div className="text-center pt-20">
+            <h2 className="text-3xl font-bold text-green-700">
               Setup Complete!
             </h2>
-            <p className="text-gray-600">
-              Your organization is ready with employees added. You can now
-              proceed to the dashboard or any other actions.
+            <p className="text-gray-600 mt-4 text-lg">
+              Your employees and projects have been successfully synchronized.
             </p>
             <button
-              className="w-full bg-green-500 hover:bg-green-700 text-white py-2 rounded-md mt-4"
+              className="bg-green-600 text-white px-10 py-3 rounded-md mt-10 hover:bg-green-700"
               onClick={() => navigate("/tracker")}
             >
               Go To Dashboard
