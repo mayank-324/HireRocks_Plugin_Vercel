@@ -67,6 +67,26 @@ export async function fetchZohoProjects() {
   });
 }
 
+export async function fetchZohoTasks() {
+  return new Promise((resolve, reject) => {
+    if (!window.ZOHO) {
+      reject("Zoho SDK not initialized");
+      return;
+    }
+
+    // This fetches the list you see in your screenshot
+    window.ZOHO.CRM.API.getAllRecords({
+      Entity: "Tasks", // Use "Tasks" to match your Workqueue
+      sort_order: "asc",
+    })
+      .then((response) => {
+        // response.data contains the Subject, Status, Priority, etc.
+        resolve(response.data || []);
+      })
+      .catch((err) => reject(err));
+  });
+}
+
 /**
  * Sends selected Zoho projects to the HireRocks API.
  */
@@ -86,6 +106,34 @@ export async function syncProjectsToHireRocks(selectedProjects) {
   };
 
   const res = await axios.post(`${BASE_URL}/api/tracker/plugin/sync-projects`, payload, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  return res.data;
+}
+
+export async function syncTasksToHireRocks(selectedTasks) {
+  const token = localStorage.getItem("access_token");
+  const hireRocksOrgId = localStorage.getItem("hireRocksOrgId");
+
+  const payload = {
+    OrganizationId: hireRocksOrgId,
+    Source: "Zoho_Tasks",
+    Projects: selectedTasks.map((t) => ({
+      ExternalId: t.id,
+      Title: t.Subject,
+      Description: t.Description || "",
+      StartDate: t.Created_Time,
+      DueDate: t.Due_Date,
+      Priority: t.Priority,
+      Status: t.Status
+    })),
+  };
+
+  const res = await axios.post(`https://api.hirerocks.com/api/tracker/plugin/sync-projects`, payload, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",

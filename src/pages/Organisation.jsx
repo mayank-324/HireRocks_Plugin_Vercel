@@ -20,6 +20,7 @@ import {
   sendSalesforceUsersToHireRocks,
 } from "../integrations/salesforce/salesforceApi";
 import {
+  fetchZohoTasks,
   fetchZohoUsers,
   sendZohoUsersToHireRocks,
 } from "../integrations/zoho/zohoApi.js";
@@ -52,6 +53,15 @@ function Organization() {
 
   const APP_URI = process.env.REACT_APP_API_URL;
   const MAX_SELECT = 10;
+
+  useEffect(() => {
+    const loadTasks = async () => {
+      const tasks = await fetchZohoTasks();
+      console.log(tasks);
+    };
+
+    loadTasks();
+  }, []);
 
   // 1️ Detect platform once
 
@@ -410,8 +420,8 @@ function Organization() {
   const handleToggleEmployee = (emp) => {
     setSelectedEmployees((prev) => {
       const exists = prev.find((e) => e.id === emp.id);
-      if (exists) return prev.filter((e) => e.id !== emp.id);
-      return [...prev, { ...emp, jobId: null }];
+      if (exists) return prev.filter((e) => e.id !== emp.id); // Uncheck
+      return [...prev, { ...emp, jobId: null }]; // Check
     });
   };
 
@@ -815,19 +825,20 @@ function Organization() {
           />
         )}
 
-        {/* Step 4: Employee Selection & Assignment */}
+        {/* Step 4: Employee Assignment - Corrected logic */}
         {step === 4 && (
-          <div className="w-full">
+          <div className="w-full max-w-4xl mx-auto">
             <h2 className="text-xl font-bold text-gray-700 mb-4">
               Step 4: Assign Employees to Synced Projects
             </h2>
             <div className="bg-white border border-gray-300 rounded-md overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="p-3 text-left">User</th>
-                    <th className="p-3 text-left">Assign Job</th>
-                    <th className="p-3 text-center">Select</th>
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-2 text-left">User</th>
+                    <th className="p-2 text-left">Email</th>
+                    <th className="p-2 text-left">Assign Job</th>
+                    <th className="p-2 text-center">Select</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -837,18 +848,13 @@ function Organization() {
                     );
                     return (
                       <tr key={emp.id} className="hover:bg-gray-50 border-t">
-                        <td className="p-3">
-                          {emp.name}
-                          <br />
-                          <span className="text-xs text-gray-400">
-                            {emp.email}
-                          </span>
-                        </td>
-                        <td className="p-3">
+                        <td className="p-2 font-semibold">{emp.name}</td>
+                        <td className="p-2">{emp.email}</td>
+                        <td className="p-2">
                           <Select
-                            placeholder="Select a Job"
+                            placeholder="Pick a Job"
                             className="w-full"
-                            disabled={!selectedData}
+                            disabled={!selectedData} // Can't pick job if user isn't selected
                             value={selectedData?.jobId}
                             onChange={(jobId) =>
                               handleUpdateJobForEmployee(emp.id, jobId)
@@ -861,7 +867,7 @@ function Organization() {
                             ))}
                           </Select>
                         </td>
-                        <td className="p-3 text-center">
+                        <td className="p-2 text-center">
                           <Checkbox
                             checked={!!selectedData}
                             onChange={() => handleToggleEmployee(emp)}
@@ -876,6 +882,7 @@ function Organization() {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={handleFinalSync}
+                disabled={loading}
                 className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-all"
               >
                 {loading ? "Syncing..." : "Finish and Sync"}
