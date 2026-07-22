@@ -15,6 +15,10 @@ const JobSyncStep = ({ onNext }) => {
       setLoading(true);
       try {
         const data = await fetchZohoProjects();
+        console.log(
+          "===================================zoho projectssss :--",
+          data
+        );
         setProjects(data);
       } catch (e) {
         message.error("Failed to load projects from Zoho");
