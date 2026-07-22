@@ -23,9 +23,8 @@ import {
   fetchZohoTasks,
   fetchZohoUsers,
   sendZohoUsersToHireRocks,
+  syncTasksToHireRocks,
 } from "../integrations/zoho/zohoApi.js";
-import { Checkbox, Select, message } from "antd";
-import JobSyncStep from "../components/JobSyncStep";
 
 function Organization() {
   const navigate = useNavigate();
@@ -48,20 +47,13 @@ function Organization() {
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [employeesList, setEmployeesList] = useState([]);
-  const { Option } = Select;
-  const [syncedJobs, setSyncedJobs] = useState([]);
+
+  const [tasksList, setTasksList] = useState([]);
+  const [selectedTasks, setSelectedTasks] = useState([]);
+  const [isTaskLoading, setIsTaskLoading] = useState(false);
 
   const APP_URI = process.env.REACT_APP_API_URL;
   const MAX_SELECT = 10;
-
-  useEffect(() => {
-    const loadTasks = async () => {
-      const tasks = await fetchZohoTasks();
-      console.log(tasks);
-    };
-
-    loadTasks();
-  }, []);
 
   // 1️ Detect platform once
 
@@ -129,7 +121,7 @@ function Organization() {
   };
 
   useEffect(() => {
-    if (step !== 4) return;
+    if (step !== 3) return;
 
     const hireRocksOrgId = localStorage.getItem("hireRocksOrgId");
 
@@ -256,56 +248,65 @@ function Organization() {
     }
   }, [platform, step]);
 
-  // const handleFinalSync = async () => {
-  //   try {
-  //     setLoading(true);
-  //     const selectedIds = selectedEmployees.map((e) => e.id);
-  //     if (platform === "zoho") await sendZohoUsersToHireRocks(selectedIds);
-  //     else await sendSalesforceUsersToHireRocks(selectedIds);
-
-  //     const assignments = selectedEmployees.map((emp) => ({
-  //       EmployeeId: emp.id,
-  //       JobId: emp.jobId,
-  //     }));
-
-  //     await axios.post(
-  //       `${APP_URI}/api/tracker/plugin/assign-contracts`,
-  //       {
-  //         OrganizationId: localStorage.getItem("hireRocksOrgId"),
-  //         Assignments: assignments,
-  //       },
-  //       {
-  //         headers: {
-  //           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-  //         },
-  //       }
-  //     );
-
-  //     setStep(5);
-  //   } catch (error) {
-  //     message.error("Sync failed.");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
   const handleZohoUsers = async () => {
     try {
       setLoading(true);
-
       const selectedIds = selectedEmployees.map((e) => e.id);
-
       const response = await sendZohoUsersToHireRocks(selectedIds);
       alert("Zoho Users successfully created in HireRocks!");
 
       console.log("Users created successfully:", response);
-      setStep(5);
+      setStep(4);
+      fetchAndLoadTasks();
     } catch (error) {
       console.error("Error sending users:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  const fetchAndLoadTasks = async () => {
+    setIsTaskLoading(true);
+    try {
+      // This uses the Zoho SDK window.ZOHO.CRM.API
+      const tasks = await fetchZohoTasks();
+      setTasksList(tasks);
+    } catch (err) {
+      console.error("Error fetching tasks:", err);
+      alert(
+        "Could not fetch tasks from Zoho. Make sure the SDK is initialized."
+      );
+    } finally {
+      setIsTaskLoading(false);
+    }
+  };
+
+  const handleSyncTasks = async () => {
+    try {
+      setLoading(true);
+      if (selectedTasks.length === 0) {
+        alert("Please select at least one task to sync.");
+        return;
+      }
+      await syncTasksToHireRocks(selectedTasks);
+      alert("Tasks synced successfully!");
+      setStep(5); // Now move to final confirmation
+    } catch (err) {
+      console.error("Sync error:", err);
+      alert("Failed to sync tasks to HireRocks.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleTaskSelection = (task) => {
+    setSelectedTasks((prev) =>
+      prev.find((t) => t.id === task.id)
+        ? prev.filter((t) => t.id !== task.id)
+        : [...prev, task]
+    );
+  };
+
   const handleSalesforceUsers = async () => {
     try {
       setLoading(true);
@@ -375,100 +376,6 @@ function Organization() {
   const handleCreateOrganization = () => {
     setCreateMode(true);
     setStep(1);
-  };
-
-  // Fetch CRM Users when we reach Step 4
-  useEffect(() => {
-    if (step !== 4) return;
-    const hireRocksOrgId = localStorage.getItem("hireRocksOrgId");
-
-    const loadUsers = async (token, fetchFunc) => {
-      try {
-        setLoading(true);
-        const raw = await fetchFunc(token, hireRocksOrgId);
-        const records = Array.isArray(raw)
-          ? raw
-          : raw?.users || raw?.data || [];
-        const mapped = records.map((u) => ({
-          id: u.Id ?? u.id ?? u.userId,
-          name:
-            u.FirstName || u.LastName
-              ? `${u.FirstName || ""} ${u.LastName || ""}`.trim()
-              : u.Full_Name || u.Name || "",
-          email: (u.Email ?? u.email) || "",
-          role: (u.Role ?? u.role) || "Member",
-        }));
-        setEmployeesList(mapped);
-      } catch (err) {
-        message.error("Failed to load users from CRM");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (platform === "zoho") {
-      const token = getZohoAccessToken();
-      if (token) loadUsers(token, fetchZohoUsers);
-      else loginToZoho();
-    } else if (platform === "salesforce") {
-      const token = getSalesforceAccessToken();
-      if (token) loadUsers(token, fetchSalesforceUsers);
-      else loginToSalesforce();
-    }
-  }, [step, platform]);
-
-  const handleToggleEmployee = (emp) => {
-    setSelectedEmployees((prev) => {
-      const exists = prev.find((e) => e.id === emp.id);
-      if (exists) return prev.filter((e) => e.id !== emp.id); // Uncheck
-      return [...prev, { ...emp, jobId: null }]; // Check
-    });
-  };
-
-  const handleUpdateJobForEmployee = (empId, jobId) => {
-    setSelectedEmployees((prev) =>
-      prev.map((e) => (e.id === empId ? { ...e, jobId } : e))
-    );
-  };
-
-  // Final API call: Sync Users + Assign Contracts
-  const handleFinalSync = async () => {
-    if (selectedEmployees.length === 0)
-      return message.warning("Please select at least one employee");
-    if (selectedEmployees.some((e) => !e.jobId))
-      return message.error("Please assign a job to all selected employees");
-
-    setLoading(true);
-    try {
-      const ids = selectedEmployees.map((e) => e.id);
-      // 1. Create Users in HireRocks
-      if (platform === "zoho") await sendZohoUsersToHireRocks(ids);
-      else await sendSalesforceUsersToHireRocks(ids);
-
-      // 2. Create Contracts (Assign Jobs)
-      await axios.post(
-        `${APP_URI}/api/tracker/plugin/assign-contracts`,
-        {
-          OrganizationId: localStorage.getItem("hireRocksOrgId"),
-          Assignments: selectedEmployees.map((e) => ({
-            EmployeeId: e.id,
-            JobId: e.jobId,
-          })),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-          },
-        }
-      );
-
-      message.success("Setup complete!");
-      setStep(5);
-    } catch (e) {
-      message.error("Final synchronization failed.");
-    } finally {
-      setLoading(false);
-    }
   };
 
   const verifyOTP = async () => {
@@ -815,93 +722,222 @@ function Organization() {
           </div>
         )}
 
-        {/* --- Step 3: NEW Job Sync Step --- */}
-        {step === 3 && (
-          <JobSyncStep
-            onNext={(jobs) => {
-              setSyncedJobs(jobs); // Receive list of {id, name} from JobSyncStep
-              setStep(4);
-            }}
-          />
-        )}
+        {/* Step 4: Add Employees */}
+        {createMode && step === 3 && (
+          <div className="w-full max-w-3xl mx-auto">
+            <label className="block text-lg font-bold text-gray-700 mb-2">
+              From your CRM users, you may select up to 10 users based on your
+              plan.
+            </label>
 
-        {/* Step 4: Employee Assignment - Corrected logic */}
-        {step === 4 && (
-          <div className="w-full max-w-4xl mx-auto">
-            <h2 className="text-xl font-bold text-gray-700 mb-4">
-              Step 4: Assign Employees to Synced Projects
-            </h2>
-            <div className="bg-white border border-gray-300 rounded-md overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="p-2 text-left">User</th>
-                    <th className="p-2 text-left">Email</th>
-                    <th className="p-2 text-left">Assign Job</th>
-                    <th className="p-2 text-center">Select</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employeesList.map((emp) => {
-                    const selectedData = selectedEmployees.find(
-                      (e) => e.id === emp.id
-                    );
-                    return (
-                      <tr key={emp.id} className="hover:bg-gray-50 border-t">
-                        <td className="p-2 font-semibold">{emp.name}</td>
-                        <td className="p-2">{emp.email}</td>
-                        <td className="p-2">
-                          <Select
-                            placeholder="Pick a Job"
-                            className="w-full"
-                            disabled={!selectedData} // Can't pick job if user isn't selected
-                            value={selectedData?.jobId}
-                            onChange={(jobId) =>
-                              handleUpdateJobForEmployee(emp.id, jobId)
-                            }
-                          >
-                            {syncedJobs.map((j) => (
-                              <Option key={j.id} value={j.id}>
-                                {j.name}
-                              </Option>
-                            ))}
-                          </Select>
-                        </td>
-                        <td className="p-2 text-center">
-                          <Checkbox
-                            checked={!!selectedData}
-                            onChange={() => handleToggleEmployee(emp)}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={handleFinalSync}
-                disabled={loading}
-                className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-all"
+            <div className="relative">
+              {/* Selected employees box */}
+              <div
+                className="border border-gray-300 rounded-md p-3 cursor-pointer bg-white overflow-y-auto max-h-40"
+                onClick={() => setIsOpen(!isOpen)}
               >
-                {loading ? "Syncing..." : "Finish and Sync"}
+                {selectedEmployees.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedEmployees.map((emp) => (
+                      <span
+                        key={emp.id}
+                        className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-sm flex items-center"
+                      >
+                        {emp.name}
+                        <button
+                          className="ml-1 text-red-500"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelect(emp);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-gray-400">Select employees...</span>
+                )}
+              </div>
+
+              {/* Dropdown — absolute inside parent so it stays within white box */}
+              {isOpen && (
+                <div className="absolute left-0 mt-1 w-[80vw] max-w-[80%] border border-gray-300 rounded-md max-h-60 overflow-y-auto bg-white shadow-xl z-10 p-2">
+                  {employeesList.length === 0 ? (
+                    <div className="p-2 text-gray-500 italic">
+                      {platform === "zoho"
+                        ? "No Zoho users found."
+                        : platform === "salesforce"
+                        ? "No Salesforce users found."
+                        : "Showing 100 default users."}
+                    </div>
+                  ) : (
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-gray-100 sticky top-0">
+                          <th className="border px-2 py-1 text-left">User</th>
+                          <th className="border px-2 py-1 text-left">Email</th>
+                          <th className="border px-2 py-1 text-left">Role</th>
+                          <th className="border px-2 py-1 text-center">
+                            Add to Hirerocks
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {employeesList.map((emp) => {
+                          const isSelected = selectedEmployees.some(
+                            (e) => e.id === emp.id
+                          );
+
+                          return (
+                            <tr key={emp.id} className="hover:bg-gray-50">
+                              <td className="border px-2 py-1">{emp.name}</td>
+                              <td className="border px-2 py-1">{emp.email}</td>
+                              <td className="border px-2 py-1">{emp.role}</td>
+
+                              <td className="border px-2 py-1 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  disabled={
+                                    !isSelected &&
+                                    selectedEmployees.length >= MAX_SELECT
+                                  }
+                                  onChange={() => handleSelect(emp)}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Button next to dropdown */}
+            <div className="flex items-center justify-between mt-3">
+              <button
+                onClick={handleDoneClick}
+                className={`px-4 py-2 rounded-md text-white 
+                 ${
+                   loading
+                     ? "bg-gray-400 cursor-not-allowed"
+                     : "bg-blue-500 hover:bg-blue-700"
+                 }
+               `}
+              >
+                {loading ? "Loading..." : "Done"}
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 5: Success */}
+        {/* Step 4: Sync Zoho Tasks (Jobs) */}
+        {createMode && step === 4 && (
+          <div className="w-full max-w-4xl mx-auto h-full flex flex-col">
+            <h2 className="text-2xl font-bold text-gray-700 mb-2">
+              Step 4: Sync Zoho Tasks as Jobs
+            </h2>
+            <p className="text-gray-500 mb-4">
+              Select the tasks from your Workqueue that you want to track in
+              HireRocks.
+            </p>
+
+            <div className="flex-1 overflow-y-auto border border-gray-300 rounded-md bg-gray-50 p-2">
+              {isTaskLoading ? (
+                <div className="flex justify-center items-center h-40">
+                  Loading Tasks from Zoho...
+                </div>
+              ) : tasksList.length === 0 ? (
+                <div className="p-4 text-center">
+                  No tasks found in your Zoho Workqueue.
+                </div>
+              ) : (
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-200 sticky top-0">
+                    <tr>
+                      <th className="p-2 border">Subject (Job Name)</th>
+                      <th className="p-2 border">Due Date</th>
+                      <th className="p-2 border">Status</th>
+                      <th className="p-2 border text-center">Sync</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasksList.map((task) => (
+                      <tr key={task.id} className="hover:bg-white">
+                        <td className="p-2 border font-medium">
+                          {task.Subject}
+                        </td>
+                        <td className="p-2 border">
+                          {task.Due_Date || "No Date"}
+                        </td>
+                        <td className="p-2 border">
+                          <span
+                            className={`px-2 py-1 rounded text-xs ${
+                              task.Status === "Completed"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-yellow-100 text-yellow-700"
+                            }`}
+                          >
+                            {task.Status}
+                          </span>
+                        </td>
+                        <td className="p-2 border text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedTasks.some(
+                              (t) => t.id === task.id
+                            )}
+                            onChange={() => toggleTaskSelection(task)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-between items-center">
+              <button
+                onClick={() => setStep(5)}
+                className="text-gray-500 hover:underline"
+              >
+                Skip for now
+              </button>
+              <button
+                onClick={handleSyncTasks}
+                disabled={loading || selectedTasks.length === 0}
+                className={`px-6 py-2 rounded-md text-white font-bold ${
+                  loading || selectedTasks.length === 0
+                    ? "bg-gray-400"
+                    : "bg-green-600 hover:bg-green-700"
+                }`}
+              >
+                {loading
+                  ? "Syncing..."
+                  : `Sync ${selectedTasks.length} Selected Jobs`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Final Confirmation */}
         {step === 5 && (
-          <div className="text-center pt-20">
-            <h2 className="text-3xl font-bold text-green-700">
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-800">
               Setup Complete!
             </h2>
-            <p className="text-gray-600 mt-4 text-lg">
-              Your employees and projects have been successfully synchronized.
+            <p className="text-gray-600">
+              Your organization is ready with employees added. You can now
+              proceed to the dashboard or any other actions.
             </p>
             <button
-              className="bg-green-600 text-white px-10 py-3 rounded-md mt-10 hover:bg-green-700"
+              className="w-full bg-green-500 hover:bg-green-700 text-white py-2 rounded-md mt-4"
               onClick={() => navigate("/tracker")}
             >
               Go To Dashboard
