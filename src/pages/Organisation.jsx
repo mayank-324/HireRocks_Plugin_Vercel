@@ -20,10 +20,8 @@ import {
   sendSalesforceUsersToHireRocks,
 } from "../integrations/salesforce/salesforceApi";
 import {
-  fetchZohoTasks,
   fetchZohoUsers,
   sendZohoUsersToHireRocks,
-  syncTasksToHireRocks,
 } from "../integrations/zoho/zohoApi.js";
 
 function Organization() {
@@ -47,10 +45,6 @@ function Organization() {
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [employeesList, setEmployeesList] = useState([]);
-
-  const [tasksList, setTasksList] = useState([]);
-  const [selectedTasks, setSelectedTasks] = useState([]);
-  const [isTaskLoading, setIsTaskLoading] = useState(false);
 
   const APP_URI = process.env.REACT_APP_API_URL;
   const MAX_SELECT = 10;
@@ -251,62 +245,20 @@ function Organization() {
   const handleZohoUsers = async () => {
     try {
       setLoading(true);
+
       const selectedIds = selectedEmployees.map((e) => e.id);
+
       const response = await sendZohoUsersToHireRocks(selectedIds);
       alert("Zoho Users successfully created in HireRocks!");
 
       console.log("Users created successfully:", response);
-      setStep(4);
-      fetchAndLoadTasks();
+      setStep(5);
     } catch (error) {
       console.error("Error sending users:", error);
     } finally {
       setLoading(false);
     }
   };
-
-  const fetchAndLoadTasks = async () => {
-    setIsTaskLoading(true);
-    try {
-      // This uses the Zoho SDK window.ZOHO.CRM.API
-      const tasks = await fetchZohoTasks();
-      setTasksList(tasks);
-    } catch (err) {
-      console.error("Error fetching tasks:", err);
-      alert(
-        "Could not fetch tasks from Zoho. Make sure the SDK is initialized."
-      );
-    } finally {
-      setIsTaskLoading(false);
-    }
-  };
-
-  const handleSyncTasks = async () => {
-    try {
-      setLoading(true);
-      if (selectedTasks.length === 0) {
-        alert("Please select at least one task to sync.");
-        return;
-      }
-      await syncTasksToHireRocks(selectedTasks);
-      alert("Tasks synced successfully!");
-      setStep(5); // Now move to final confirmation
-    } catch (err) {
-      console.error("Sync error:", err);
-      alert("Failed to sync tasks to HireRocks.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleTaskSelection = (task) => {
-    setSelectedTasks((prev) =>
-      prev.find((t) => t.id === task.id)
-        ? prev.filter((t) => t.id !== task.id)
-        : [...prev, task]
-    );
-  };
-
   const handleSalesforceUsers = async () => {
     try {
       setLoading(true);
@@ -831,96 +783,6 @@ function Organization() {
                `}
               >
                 {loading ? "Loading..." : "Done"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: Sync Zoho Tasks (Jobs) */}
-        {createMode && step === 4 && (
-          <div className="w-full max-w-4xl mx-auto h-full flex flex-col">
-            <h2 className="text-2xl font-bold text-gray-700 mb-2">
-              Step 4: Sync Zoho Tasks as Jobs
-            </h2>
-            <p className="text-gray-500 mb-4">
-              Select the tasks from your Workqueue that you want to track in
-              HireRocks.
-            </p>
-
-            <div className="flex-1 overflow-y-auto border border-gray-300 rounded-md bg-gray-50 p-2">
-              {isTaskLoading ? (
-                <div className="flex justify-center items-center h-40">
-                  Loading Tasks from Zoho...
-                </div>
-              ) : tasksList.length === 0 ? (
-                <div className="p-4 text-center">
-                  No tasks found in your Zoho Workqueue.
-                </div>
-              ) : (
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-200 sticky top-0">
-                    <tr>
-                      <th className="p-2 border">Subject (Job Name)</th>
-                      <th className="p-2 border">Due Date</th>
-                      <th className="p-2 border">Status</th>
-                      <th className="p-2 border text-center">Sync</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tasksList.map((task) => (
-                      <tr key={task.id} className="hover:bg-white">
-                        <td className="p-2 border font-medium">
-                          {task.Subject}
-                        </td>
-                        <td className="p-2 border">
-                          {task.Due_Date || "No Date"}
-                        </td>
-                        <td className="p-2 border">
-                          <span
-                            className={`px-2 py-1 rounded text-xs ${
-                              task.Status === "Completed"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-yellow-100 text-yellow-700"
-                            }`}
-                          >
-                            {task.Status}
-                          </span>
-                        </td>
-                        <td className="p-2 border text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedTasks.some(
-                              (t) => t.id === task.id
-                            )}
-                            onChange={() => toggleTaskSelection(task)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            <div className="mt-4 flex justify-between items-center">
-              <button
-                onClick={() => setStep(5)}
-                className="text-gray-500 hover:underline"
-              >
-                Skip for now
-              </button>
-              <button
-                onClick={handleSyncTasks}
-                disabled={loading || selectedTasks.length === 0}
-                className={`px-6 py-2 rounded-md text-white font-bold ${
-                  loading || selectedTasks.length === 0
-                    ? "bg-gray-400"
-                    : "bg-green-600 hover:bg-green-700"
-                }`}
-              >
-                {loading
-                  ? "Syncing..."
-                  : `Sync ${selectedTasks.length} Selected Jobs`}
               </button>
             </div>
           </div>
