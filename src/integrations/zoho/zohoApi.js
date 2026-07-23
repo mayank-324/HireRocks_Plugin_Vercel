@@ -21,7 +21,7 @@ export async function fetchZohoUsers(accessToken, hireRocksOrgId) {
   const data = res.data;
 
 
-  const tasks = await fetchZohoTasks();
+  const tasks = await fetchAllTasks(accessToken);
   console.log("----------------------------------- tasks :----------------", tasks);
 
   if (Array.isArray(data)) return data;
@@ -91,6 +91,75 @@ export async function fetchZohoTasks() {
       })
       .catch((err) => reject(err));
   });
+}
+
+async function fetchAllTasks(token) {
+  let allTasks = [];
+  let page = 1;
+  let hasMoreRecords = true;
+
+  console.log('Starting to fetch all tasks from Zoho CRM...');
+
+  try {
+    while (hasMoreRecords) {
+      console.log(`Fetching page ${page}...`);
+
+      const response = await axios.get(`https://zohoapis.in/crm/v5/Tasks`, {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`
+        },
+        params: {
+          page: page,       // Current page index
+          per_page: 200     // Maximum allowed per request to minimize API calls
+        }
+      });
+
+      // Status 204 means the module is completely empty
+      if (response.status === 204) {
+        console.log('No tasks found in this organization.');
+        break;
+      }
+
+      const data = response.data;
+
+      if (data && data.data) {
+        // Merge the current page's tasks into our master array
+        allTasks = allTasks.concat(data.data);
+
+        // Check if Zoho states there are more records beyond this page
+        if (data.info && data.info.more_records === true) {
+          page++;
+        } else {
+          hasMoreRecords = false; // Finished reading all records
+        }
+      } else {
+        hasMoreRecords = false;
+      }
+    }
+
+    console.log(`\nSuccessfully fetched all tasks!`);
+    console.log(`Total Tasks Retrieved: ${allTasks.length}`);
+
+    // Print an example breakdown of tasks mapped to their assigned owner
+    displayTasksSummary(allTasks);
+
+    return allTasks;
+
+  } catch (error) {
+    console.error('Error fetching tasks from Zoho CRM:', error.response ? error.response.data : error.message);
+  }
+}
+
+function displayTasksSummary(tasks) {
+  if (tasks.length === 0) return;
+
+  console.log('\n--- Sample Records Mapping ---');
+  tasks.slice(0, 5).forEach((task, index) => {
+    const ownerName = task.Owner ? task.Owner.name : 'Unassigned';
+    const ownerId = task.Owner ? task.Owner.id : 'N/A';
+    console.log(`${index + 1}. Task: "${task.Subject}" | Status: ${task.Status} | Assigned To: ${ownerName} (ID: ${ownerId})`);
+  });
+  if (tasks.length > 5) console.log(`... and ${tasks.length - 5} more tasks.`);
 }
 
 /**
