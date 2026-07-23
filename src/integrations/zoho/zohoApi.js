@@ -10,8 +10,6 @@ export async function fetchZohoUsers(accessToken, hireRocksOrgId) {
 
   const url = `${BASE_URL}/active_users`;
 
-  const tasks = await fetchZohoTasks();
-  console.log("----------------------------------- tasks :----------------", tasks);
 
   const res = await axios.get(url, {
     params: {
@@ -21,6 +19,11 @@ export async function fetchZohoUsers(accessToken, hireRocksOrgId) {
   });
 
   const data = res.data;
+
+
+  const tasks = await fetchZohoTasks();
+  console.log("----------------------------------- tasks :----------------", tasks);
+
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.users)) return data.users;
   return [];
