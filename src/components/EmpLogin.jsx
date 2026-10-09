@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { message } from "antd";
+import logger from "../telemetry/logger";
 
 function EmpLogin() {
   const [messageApi, contextHolder] = message.useMessage();
@@ -43,6 +44,10 @@ function EmpLogin() {
         message.error("Login Failed!, Please try again.");
       }
     } catch (err) {
+      logger.error(err,{
+        operation: "user_login",
+        email: email
+      });
       if (err.response.data == "Your email not verified yet.") {
         setShowOtpVerification(true);
         return;

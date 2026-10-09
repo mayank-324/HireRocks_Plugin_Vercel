@@ -134,13 +134,13 @@ function Organization() {
           const raw = await fetchZohoUsers(token, hireRocksOrgId);
           const mapped = normalizeUsers(raw);
           setEmployeesList(mapped);
-        } catch (error) {
-          logger.error(error,{
+        } catch (err) {
+          logger.error(err,{
             platform: platform,
             operation: "zoho_fetch_users",
             orgId: hireRocksOrgId,
-          })
-          console.error("Zoho token handler error:", error);
+          });
+          console.error("Zoho token handler error:", err);
           alert("Failed to fetch Zoho users.");
         } finally {
           setLoading(false);
@@ -157,17 +157,25 @@ function Organization() {
             const mapped = normalizeUsers(raw);
             setEmployeesList(mapped);
           })
-          .catch((err) => {
+          .catch((err) => { 
+            const status = err.response?.status;
 
-            console.warn("Saved Zoho token failed to fetch users:", err);
+            if(status == 401){
+              sessionStorage.removeItem("zoho_access_token");
+              try{
+                storeZohoAccessToken(null);
+              }catch(e){}
+              loginToZoho();
+              return;
+            }
 
-            // Clear expired token
-            sessionStorage.removeItem("zoho_access_token");
-            try {
-              storeZohoAccessToken(null);
-            } catch (e) {}
+            logger.error(err,{
+              platform,
+              operation:"fetch_users_saved_token",
+              orgId: hireRocksOrgId
+            });
 
-            // Trigger login popup
+            alert("Unable to fetch Zoho users. Please try again.");
             loginToZoho();
           })
           .finally(() => setLoading(false));
@@ -200,13 +208,13 @@ function Organization() {
           const raw = await fetchSalesforceUsers(token, hireRocksOrgId);
           const mapped = normalizeUsers(raw);
           setEmployeesList(mapped);
-        } catch (error) {
-          logger.error(error,{
+        } catch (err) {
+          logger.error(err,{
             platform: platform,
             operation: "salesforce_fetch_users",
             orgId: localStorage.getItem("hireRocksOrgId"),
-          })
-          console.error("Salesforce token handler error:", error);
+          });
+          console.error("Salesforce token handler error:", err);
           alert("Failed to fetch Salesforce users.");
         } finally {
           setLoading(false);
@@ -224,14 +232,24 @@ function Organization() {
             setEmployeesList(mapped);
           })
           .catch((err) => {
-            console.warn("Saved Salesforce token failed to fetch users:", err);
+            const status = err.response?.status;
 
-            // Clear expired token
-            sessionStorage.removeItem("salesforce_access_token");
-            try {
-              storeSalesforceAccessToken(null);
-            } catch (e) {}
+            if(status === 401){
+              sessionStorage.removeItem("salesforce_access_token");
+              try{
+                storeSalesforceAccessToken(null);
+              }catch(e){}
+              loginToSalesforce();
+              return;
+            }
 
+            logger.error(err,{
+              platform,
+              operation:"fetch_users_saved_token",
+              orgId: hireRocksOrgId
+            });
+            alert("Unable to fetch salesforce users. Please try again.");
+            
             // Trigger login popup
             loginToSalesforce();
           })
@@ -260,14 +278,14 @@ function Organization() {
 
       console.log("Users created successfully:", response);
       setStep(5);
-    } catch (error) {
-      logger.error(error,{
+    } catch (err) {
+      logger.error(err,{
             platform: platform,
             operation: "hirerocks_send_users",
             orgId: localStorage.getItem("hireRocksOrgId"),
             selectedUserCount: selectedEmployees.length,
-          })
-      console.error("Error sending users:", error);
+      });
+      console.error("Error sending users:", err);
     } finally {
       setLoading(false);
     }
@@ -302,11 +320,12 @@ function Organization() {
       } else {
         alert("Login failed. Please try again.");
       }
-    } catch (error) {
-      logger.error(error,{
+    } catch (err) {
+      logger.error(err,{
         operation:"hirerocks_login",
         platform,
-      })
+      });
+      console.error("Error viewing organization:", err);
       setErrors({ organizationError: "Invalid Credentials!" });
     } finally {
       setLoading(false);
@@ -368,13 +387,13 @@ function Organization() {
         setotpError(true);
         alert("Invalid OTP. Please try again.");
       }
-    } catch (error) {
-      logger.error(error,{
+    } catch (err) {
+      logger.error(err,{
         operation:"verify_email_otp",
         platform,
-      })
+      });
       setLoading(false);
-      console.error("Error verifying OTP:", error);
+      console.error("Error verifying OTP:", err);
       alert("Something went wrong. Please try again.");
     }
   };
@@ -428,12 +447,12 @@ function Organization() {
         } else {
           alert("Organization creation failed. Please try again.");
         }
-      } catch (error) {
-        logger.error(error,{
+      } catch (err) {
+        logger.error(err,{
           operation: "create_organization",
           platform,
-        })
-        console.error("Error creating organization:", error);
+        });
+        console.error("Error creating organization:", err);
         setorgError(true);
       } finally {
         setLoading(false); // Set loading to false after the API call (success or failure)
@@ -492,12 +511,12 @@ function Organization() {
         } else {
           alert("Failed to add employee.");
         }
-      } catch (error) {
-        logger.error(error,{
+      } catch (err) {
+        logger.error(err,{
           operation: "add_employee",
           platform,
-        })
-        console.error("Error adding employee:", error);
+        });
+        console.error("Error adding employee:", err);
         alert("An error occurred while adding the employee.");
       }
     } else {

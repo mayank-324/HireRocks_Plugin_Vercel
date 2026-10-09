@@ -1,14 +1,17 @@
 import * as Sentry from "@sentry/react";
 
-const getFinalContext = (context = {}) => {
-  return {
-    environment:
-      process.env.REACT_APP_ENVIRONMENT || "development",
+const getFinalContext = (context = {}) => ({
+  environment: process.env.REACT_APP_ENVIRONMENT || "development",
+  pluginVersion: process.env.REACT_APP_PLUGIN_VERSION || "unknown",
+  ...context,
+});
 
-    pluginVersion:
-      process.env.REACT_APP_PLUGIN_VERSION || "unknown",
-    ...context,
-  };
+const setContextTags = (scope, context) => {
+  Object.entries(context).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      scope.setTag(key, String(value));
+    }
+  });
 };
 
 const logger = {
@@ -16,12 +19,8 @@ const logger = {
     const finalContext = getFinalContext(context);
 
     Sentry.withScope((scope) => {
-      Object.entries(finalContext).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          scope.setTag(key, String(value));
-        }
-      });
-
+      setContextTags(scope, finalContext);
+      scope.setExtra("errorMessage", error?.message || String(error));
       Sentry.captureException(error);
     });
   },
@@ -30,11 +29,7 @@ const logger = {
     const finalContext = getFinalContext(context);
 
     Sentry.withScope((scope) => {
-      Object.entries(finalContext).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          scope.setTag(key, String(value));
-        }
-      });
+      setContextTags(scope, finalContext);
 
       Sentry.captureMessage(message, "warning");
     });
