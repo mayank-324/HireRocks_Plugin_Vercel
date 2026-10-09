@@ -31,7 +31,7 @@ export const initSentry = () => {
   const sentryDSN = process.env.REACT_APP_SENTRY_DSN;
 
   if(!sentryDSN){
-    console.warn("Sentry DSN is not configured.");
+    console.log("Sentry DSN is not configured.");
     return;
   }
   Sentry.init({
@@ -51,4 +51,6 @@ export const initSentry = () => {
     sendDefaultPii: false,
     tracePropagationTargets: [],
   });
+
+  console.log("Sentry DSN is configured.");
 };
