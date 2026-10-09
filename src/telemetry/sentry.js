@@ -36,8 +36,8 @@ export const initSentry = () => {
   }
   Sentry.init({
     dsn: sentryDSN,
-    environment: process.env.REACT_APP_ENVIRONMENT || "development",
-    release: process.env.REACT_APP_PLUGIN_VERSION || "Production",
+    environment: process.env.REACT_APP_ENVIRONMENT ?? "development",
+    release: process.env.REACT_APP_PLUGIN_VERSION ?? "Production",
     
     // Central event sanitization.
     beforeSend(event) {
