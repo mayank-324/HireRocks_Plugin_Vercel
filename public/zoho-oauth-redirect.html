@@ -44,13 +44,13 @@
 
             if (!token) {
                 console.error("No access token found");
-                window.close();
+                // window.close();
                 return;
             }
 
             if (!parentOrigin) {
                 console.error("Missing origin parameter. Token NOT sent.");
-                window.close();
+                // window.close();
                 return;
             }
 
@@ -63,7 +63,7 @@
                 parentOrigin
             );
 
-            window.close();
+            // window.close();
         })();
     </script>
 </body>
