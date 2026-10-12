@@ -28,18 +28,11 @@ function sanitizeEvent(event){
 }
 
 export const initSentry = () => {
-  console.log("[Sentry Debug] initSentry called");
 
   const sentryDSN =
     process.env.REACT_APP_SENTRY_DSN;
 
-  console.log(
-    "[Sentry Debug] DSN configured:",
-    Boolean(sentryDSN)
-  );
-
   if (!sentryDSN) {
-    console.warn("[Sentry Debug] Missing DSN");
     return;
   }
   Sentry.init({

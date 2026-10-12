@@ -5,8 +5,6 @@ import App from './App';
 
 //Initialize Sentry
 import { initSentry } from './telemetry/sentry';
-
-console.log("[Debug] Application entry loaded");
 initSentry();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
