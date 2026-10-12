@@ -44,17 +44,37 @@ export function loginToZoho() {
 
 export function attachZohoTokenListener(onToken) {
   console.log("[Zoho OAuth] 4. Registering message listener");
+
   function handler(event) {
+    if (event.data?.type !== "ZOHO_TOKEN") return;
+
     console.log("[Zoho OAuth] 5. Token message received", {
       senderOrigin: event.origin,
       appOrigin: window.location.origin,
     });
-    if (event.origin !== window.location.origin) return;
-    if (event.data?.type === "ZOHO_TOKEN") onToken(event.data.token);
+
+    if (event.origin !== window.location.origin) {
+      console.error("[Zoho OAuth] 6. Token message rejected: origin mismatch");
+      return;
+    }
+
+    if (typeof event.data.token !== "string" || !event.data.token) {
+      console.error("[Zoho OAuth] 6. Token message rejected: missing token");
+      return;
+    }
+
+    console.log("[Zoho OAuth] 6. Token message accepted");
+    onToken(event.data.token);
   }
-  console.log("[Zoho OAuth] 6. Token message accepted");
+
   window.addEventListener("message", handler);
-  return () => window.removeEventListener("message", handler);
+
+  console.log("[Zoho OAuth] Message listener registered");
+
+  return () => {
+    window.removeEventListener("message", handler);
+    console.log("[Zoho OAuth] Message listener removed");
+  };
 }
 
 export function storeZohoAccessToken(token) {
