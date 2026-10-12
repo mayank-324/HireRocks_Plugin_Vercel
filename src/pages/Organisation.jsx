@@ -283,7 +283,7 @@ function Organization() {
           {
             platform: platform,
             operation: "hirerocks_send_users",
-            orgId
+            orgId: localStorage.getItem("hireRocksOrgId")
           }
         );
 
@@ -299,7 +299,7 @@ function Organization() {
         logger.warning("No Zoho users were created in HireRocks", {
           platform: platform,
           operation: "hirerocks_send_users",
-          orgId
+          orgId: localStorage.getItem("hireRocksOrgId")
         });
 
         alert("No users were created. Please check the API response.");
