@@ -87,10 +87,10 @@ function Organization() {
     const records = Array.isArray(raw)
       ? raw
       : Array.isArray(raw?.users)
-      ? raw.users
-      : Array.isArray(raw?.data)
-      ? raw.data
-      : [];
+        ? raw.users
+        : Array.isArray(raw?.data)
+          ? raw.data
+          : [];
 
     return records.map((u) => {
       const id = u.Id ?? u.id ?? u.userId;
@@ -127,7 +127,7 @@ function Organization() {
 
           try {
             storeZohoAccessToken(token);
-          } catch (e) {}
+          } catch (e) { }
 
           sessionStorage.setItem("zoho_access_token", token);
           console.log("[Zoho OAuth] 8. Fetching Zoho users");
@@ -135,7 +135,7 @@ function Organization() {
           const mapped = normalizeUsers(raw);
           setEmployeesList(mapped);
         } catch (err) {
-          logger.error(err,{
+          logger.error(err, {
             platform: platform,
             operation: "zoho_fetch_users",
             orgId: hireRocksOrgId,
@@ -157,21 +157,21 @@ function Organization() {
             const mapped = normalizeUsers(raw);
             setEmployeesList(mapped);
           })
-          .catch((err) => { 
+          .catch((err) => {
             const status = err.response?.status;
 
-            if(status == 401){
+            if (status == 401) {
               sessionStorage.removeItem("zoho_access_token");
-              try{
+              try {
                 storeZohoAccessToken(null);
-              }catch(e){}
+              } catch (e) { }
               loginToZoho();
               return;
             }
 
-            logger.error(err,{
+            logger.error(err, {
               platform,
-              operation:"fetch_users_saved_token",
+              operation: "fetch_users_saved_token",
               orgId: hireRocksOrgId
             });
 
@@ -187,7 +187,7 @@ function Organization() {
       return () => {
         try {
           detach();
-        } catch (e) {}
+        } catch (e) { }
       };
     }
 
@@ -201,7 +201,7 @@ function Organization() {
 
           try {
             storeSalesforceAccessToken(token);
-          } catch (e) {}
+          } catch (e) { }
 
           sessionStorage.setItem("salesforce_access_token", token);
 
@@ -209,7 +209,7 @@ function Organization() {
           const mapped = normalizeUsers(raw);
           setEmployeesList(mapped);
         } catch (err) {
-          logger.error(err,{
+          logger.error(err, {
             platform: platform,
             operation: "salesforce_fetch_users",
             orgId: localStorage.getItem("hireRocksOrgId"),
@@ -234,22 +234,22 @@ function Organization() {
           .catch((err) => {
             const status = err.response?.status;
 
-            if(status === 401){
+            if (status === 401) {
               sessionStorage.removeItem("salesforce_access_token");
-              try{
+              try {
                 storeSalesforceAccessToken(null);
-              }catch(e){}
+              } catch (e) { }
               loginToSalesforce();
               return;
             }
 
-            logger.error(err,{
+            logger.error(err, {
               platform,
-              operation:"fetch_users_saved_token",
+              operation: "fetch_users_saved_token",
               orgId: hireRocksOrgId
             });
             alert("Unable to fetch salesforce users. Please try again.");
-            
+
             // Trigger login popup
             loginToSalesforce();
           })
@@ -262,7 +262,7 @@ function Organization() {
       return () => {
         try {
           detach();
-        } catch (e) {}
+        } catch (e) { }
       };
     }
   }, [platform, step]);
@@ -274,16 +274,46 @@ function Organization() {
       const selectedIds = selectedEmployees.map((e) => e.id);
 
       const response = await sendSelectedUsersToHireRocks(selectedIds);
-      alert("Users successfully created in HireRocks!");
 
-      console.log("Users created successfully:", response);
-      setStep(5);
-    } catch (err) {
-      logger.error(err,{
+      const { Succeeded = [], Failed = [] } = response.data || {};
+
+      if (Failed.length > 0) {
+        logger.warning(
+          "Some Zoho users failed to be created in HireRocks",
+          {
             platform: platform,
             operation: "hirerocks_send_users",
-            orgId: localStorage.getItem("hireRocksOrgId"),
-            selectedUserCount: selectedEmployees.length,
+            orgId
+          }
+        );
+
+        alert(
+          `Created: ${Succeeded.length}. Failed: ${Failed.length}. Please check the logs.`
+        );
+
+        console.error("User creation failures:", Failed);
+        return;
+      }
+
+      if (Succeeded.length === 0) {
+        logger.warning("No Zoho users were created in HireRocks", {
+          platform: platform,
+          operation: "hirerocks_send_users",
+          orgId
+        });
+
+        alert("No users were created. Please check the API response.");
+        return;
+      }
+      console.log("Users created successfully:", response.data);
+
+      alert(`Successfully created ${Succeeded.length} users.`);
+      setStep(5);
+    } catch (err) {
+      logger.error(err, {
+        platform: platform,
+        operation: "hirerocks_send_users",
+        orgId: localStorage.getItem("hireRocksOrgId")
       });
       console.error("Error sending users:", err);
     } finally {
@@ -321,8 +351,8 @@ function Organization() {
         alert("Login failed. Please try again.");
       }
     } catch (err) {
-      logger.error(err,{
-        operation:"hirerocks_login",
+      logger.error(err, {
+        operation: "hirerocks_login",
         platform,
       });
       console.error("Error viewing organization:", err);
@@ -388,8 +418,8 @@ function Organization() {
         alert("Invalid OTP. Please try again.");
       }
     } catch (err) {
-      logger.error(err,{
-        operation:"verify_email_otp",
+      logger.error(err, {
+        operation: "verify_email_otp",
         platform,
       });
       setLoading(false);
@@ -448,7 +478,7 @@ function Organization() {
           alert("Organization creation failed. Please try again.");
         }
       } catch (err) {
-        logger.error(err,{
+        logger.error(err, {
           operation: "create_organization",
           platform,
         });
@@ -512,7 +542,7 @@ function Organization() {
           alert("Failed to add employee.");
         }
       } catch (err) {
-        logger.error(err,{
+        logger.error(err, {
           operation: "add_employee",
           platform,
         });
@@ -741,8 +771,8 @@ function Organization() {
                       {platform === "zoho"
                         ? "No Zoho users found."
                         : platform === "salesforce"
-                        ? "No Salesforce users found."
-                        : "Showing 100 default users."}
+                          ? "No Salesforce users found."
+                          : "Showing 100 default users."}
                     </div>
                   ) : (
                     <table className="w-full border-collapse text-sm">
@@ -795,11 +825,10 @@ function Organization() {
               <button
                 onClick={handleDoneClick}
                 className={`px-4 py-2 rounded-md text-white 
-                 ${
-                   loading
-                     ? "bg-gray-400 cursor-not-allowed"
-                     : "bg-blue-500 hover:bg-blue-700"
-                 }
+                 ${loading
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-blue-500 hover:bg-blue-700"
+                  }
                `}
               >
                 {loading ? "Loading..." : "Done"}

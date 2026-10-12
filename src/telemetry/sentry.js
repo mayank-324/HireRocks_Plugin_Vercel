@@ -6,6 +6,7 @@ const SAFE_TAGS = new Set([
   "operation",
   "environment",
   "pluginVersion",
+  "orgId"
 ]);
 
 function sanitizeEvent(event){
