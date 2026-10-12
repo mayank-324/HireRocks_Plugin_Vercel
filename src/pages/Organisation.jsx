@@ -130,7 +130,7 @@ function Organization() {
           } catch (e) {}
 
           sessionStorage.setItem("zoho_access_token", token);
-
+          console.log("[Zoho OAuth] 8. Fetching Zoho users");
           const raw = await fetchZohoUsers(token, hireRocksOrgId);
           const mapped = normalizeUsers(raw);
           setEmployeesList(mapped);
