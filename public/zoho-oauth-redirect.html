@@ -25,8 +25,7 @@
 
             // Get parent window’s origin from query param
             function getParentOrigin() {
-                const query = new URLSearchParams(location.search);
-                return query.get("origin");  // strict whitelisting
+                return "https://hire-rocks-plugin-vercel.vercel.app";
             }
 
             // Map platform → message type
