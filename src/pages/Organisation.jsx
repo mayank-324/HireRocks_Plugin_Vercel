@@ -275,7 +275,7 @@ function Organization() {
 
       const response = await sendSelectedUsersToHireRocks(selectedIds);
 
-      const { Succeeded = [], Failed = [] } = response.data || {};
+      const { Succeeded = [], Failed = [] } = response || {};
 
       if (Failed.length > 0) {
         logger.warning(
