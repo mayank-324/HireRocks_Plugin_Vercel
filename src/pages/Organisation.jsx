@@ -279,7 +279,7 @@ function Organization() {
 
       if (Failed.length > 0) {
         logger.warning(
-          "Some Zoho users failed to be created in HireRocks",
+          "Some users failed to be created in HireRocks",
           {
             platform: platform,
             operation: "hirerocks_send_users",
@@ -294,9 +294,12 @@ function Organization() {
         console.error("User creation failures:", Failed);
         return;
       }
-
+      console.log("Full response:", response.data);
+      console.log("Succeeded:", Succeeded);
+      console.log("Succeeded length:", Succeeded.length);
+      console.log("Condition:", Succeeded.length === 0);
       if (Succeeded.length === 0) {
-        logger.warning("No Zoho users were created in HireRocks", {
+        logger.warning("No users were created in HireRocks", {
           platform: platform,
           operation: "hirerocks_send_users",
           orgId: localStorage.getItem("hireRocksOrgId")
